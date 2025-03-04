@@ -18,6 +18,17 @@ TETROMINOES = {
     'S': [[0, 1, 1], [1, 1, 0]],
     'Z': [[1, 1, 0], [0, 1, 1]]
 }
+tetrocolors = {
+    'I': (0, 255, 255),
+    'O': (255, 255, 0),
+    'T': (128, 0, 128),
+    'L': (255, 165, 0),
+    'J': (0, 0, 255),
+    'S': (0, 255, 0),
+    'Z': (255, 0, 0)
+}
+
+grid = [[(0, (0, 0, 0)) for _ in range(columns)] for _ in range(rows)]
 
 def drawgrid():
     for x in range(80, 330, squaresize):
@@ -26,33 +37,111 @@ def drawgrid():
         pygame.draw.line(window, (255, 255, 255), (80, y), (320, y), 1)
 
 def spawnpiece():
-    global piece
+    global color
     piece = random.choice(list(TETROMINOES.keys()))
+    color = tetrocolors[piece]
     return piece, columns // 2 - len(TETROMINOES[piece][0]) // 2, 0
 
-def drawpiece(piece):
-    for y, row in enumerate(TETROMINOES[piece[0]]):
+def collision(piece):
+    shape = TETROMINOES[piece[0]]
+    if len(piece) == 4:
+        shape = piece[3]
+    for y, row in enumerate(shape):
         for x, square in enumerate(row):
             if square:
-                pygame.draw.rect(window, (255, 0, 0), (80 + (piece[1] + x) * squaresize, 100 + (piece[2] + y) * squaresize, squaresize, squaresize))
+                if piece[1] + x < 0 or piece[1] + x >= columns or piece[2] + y >= rows or grid[piece[2] + y][piece[1] + x][0]:
+                    return True
+    return False
+
+def drawpiece(piece):
+    shape = TETROMINOES[piece[0]]
+    if len(piece) == 4:
+        shape = piece[3]
+    for y, row in enumerate(shape):
+        for x, square in enumerate(row):
+            if square:
+                pygame.draw.rect(window, color, (80 + (piece[1] + x) * squaresize, 100 + (piece[2] + y) * squaresize, squaresize, squaresize))
+
+def drawgridpieces():
+    for y, row in enumerate(grid):
+        for x, (square, color) in enumerate(row):
+            if square:
+                pygame.draw.rect(window, color, (80 + x * squaresize, 100 + y * squaresize, squaresize, squaresize))
 
 def movedown(piece):
-    if piece[2] + len(TETROMINOES[piece[0]]) < rows:
-        return piece[0], piece[1], piece[2] + 1
+    if len(piece) == 4:
+        new_piece = piece[0], piece[1], piece[2] + 1, piece[3]
     else:
-        return spawnpiece()
-    return piece[0], piece[1], piece[2] + 1
+        new_piece = piece[0], piece[1], piece[2] + 1
+    if not collision(new_piece):
+        return new_piece
+    else:
+        lockpiece(piece)
+        return spawnnewpiece()
+
+def moveleft(piece):
+    if len(piece) == 4:
+        new_piece = piece[0], piece[1] - 1, piece[2], piece[3]
+    else:
+        new_piece = piece[0], piece[1] - 1, piece[2]
+    if not collision(new_piece):
+        return new_piece
+    return piece
+
+def moveright(piece):
+    if len(piece) == 4:
+        new_piece = piece[0], piece[1] + 1, piece[2], piece[3]
+    else:
+        new_piece = piece[0], piece[1] + 1, piece[2]
+    if not collision(new_piece):
+        return new_piece
+    return piece
+
+def rotateright(piece):
+    shape = TETROMINOES[piece[0]]
+    new_shape = [list(row) for row in zip(*shape[::-1])]
+    new_piece = piece[0], piece[1], piece[2], new_shape
+    if piece[1] + len(new_shape[0]) > columns:
+        new_piece = new_piece[0], columns - len(new_shape[0]), new_piece[2], new_shape
+    if collision(new_piece):
+        return piece
+    return new_piece
+
+def rotateleft(piece):
+    shape = TETROMINOES[piece[0]]
+    new_shape = [list(row) for row in zip(*shape)][::-1]
+    new_piece = piece[0], piece[1], piece[2], new_shape
+    if piece[1] + len(new_shape[0]) > columns:
+        new_piece = new_piece[0], columns - len(new_shape[0]), new_piece[2], new_shape
+    if collision(new_piece):
+        return piece
+    return new_piece
+
+def lockpiece(piece):
+    shape = TETROMINOES[piece[0]]
+    if len(piece) == 4:
+        shape = piece[3]
+    for y, row in enumerate(shape):
+        for x, square in enumerate(row):
+            if square:
+                grid[piece[2] + y][piece[1] + x] = (1, color)
+
+def spawnnewpiece():
+    return spawnpiece()
 
 running = True
 clock = pygame.time.Clock()
 currentpiece = spawnpiece()
 lastmovetime = pygame.time.get_ticks()
+sidelastmovetime = pygame.time.get_ticks()
+rotatelastmovetime = pygame.time.get_ticks()
 downtime = 1000
 
 while running:
     window.fill((0, 0, 0))
     drawgrid()
     drawpiece(currentpiece)
+    drawgridpieces()
     pygame.display.update()
     clock.tick(60)
 
@@ -61,14 +150,21 @@ while running:
     if currenttime - lastmovetime > downtime and not keys[pygame.K_DOWN] and not keys[pygame.K_s]:
         currentpiece = movedown(currentpiece)
         lastmovetime = currenttime
-
-    if (currenttime - lastmovetime > downtime // 2) and (keys[pygame.K_DOWN]):
+    if (currenttime - lastmovetime > downtime // 2) and (keys[pygame.K_DOWN] or keys[pygame.K_s]):
         currentpiece = movedown(currentpiece)
         lastmovetime = currenttime
-    elif (currenttime - lastmovetime > downtime // 2) and (keys[pygame.K_s]):
-        currentpiece = movedown(currentpiece)
-        lastmovetime = currenttime
-    
+    if (currenttime - sidelastmovetime > 100) and (keys[pygame.K_LEFT] or keys[pygame.K_a]):
+        currentpiece = moveleft(currentpiece)
+        sidelastmovetime = currenttime
+    if (currenttime - sidelastmovetime > 100) and (keys[pygame.K_RIGHT] or keys[pygame.K_d]):
+        currentpiece = moveright(currentpiece)
+        sidelastmovetime = currenttime
+    if currenttime - rotatelastmovetime > 100 and keys[pygame.K_e]:
+        currentpiece = rotateright(currentpiece)
+        rotatelastmovetime = currenttime
+    if currenttime - rotatelastmovetime > 100 and keys[pygame.K_q]:
+        currentpiece = rotateleft(currentpiece)
+        rotatelastmovetime = currenttime
 
     for event in pygame.event.get():
         if event.type == pygame.QUIT:

@@ -1,0 +1,75 @@
+import pygame
+import random
+
+width, height = 400, 700
+squaresize = 20
+columns, rows = 12, 25
+
+pygame.init()
+window = pygame.display.set_mode((width, height))
+pygame.display.set_caption("Tetris clone")
+
+TETROMINOES = {
+    'I': [[1, 1, 1, 1]],
+    'O': [[1, 1], [1, 1]],
+    'T': [[0, 1, 0], [1, 1, 1]],
+    'L': [[1, 0], [1, 0], [1, 1]],
+    'J': [[0, 1], [0, 1], [1, 1]],
+    'S': [[0, 1, 1], [1, 1, 0]],
+    'Z': [[1, 1, 0], [0, 1, 1]]
+}
+
+def drawgrid():
+    for x in range(80, 330, squaresize):
+        pygame.draw.line(window, (255, 255, 255), (x, 100), (x, 600), 1)
+    for y in range(100, 610, squaresize):
+        pygame.draw.line(window, (255, 255, 255), (80, y), (320, y), 1)
+
+def spawnpiece():
+    global piece
+    piece = random.choice(list(TETROMINOES.keys()))
+    return piece, columns // 2 - len(TETROMINOES[piece][0]) // 2, 0
+
+def drawpiece(piece):
+    for y, row in enumerate(TETROMINOES[piece[0]]):
+        for x, square in enumerate(row):
+            if square:
+                pygame.draw.rect(window, (255, 0, 0), (80 + (piece[1] + x) * squaresize, 100 + (piece[2] + y) * squaresize, squaresize, squaresize))
+
+def movedown(piece):
+    if piece[2] + len(TETROMINOES[piece[0]]) < rows:
+        return piece[0], piece[1], piece[2] + 1
+    else:
+        return spawnpiece()
+    return piece[0], piece[1], piece[2] + 1
+
+running = True
+clock = pygame.time.Clock()
+currentpiece = spawnpiece()
+lastmovetime = pygame.time.get_ticks()
+downtime = 1000
+
+while running:
+    window.fill((0, 0, 0))
+    drawgrid()
+    drawpiece(currentpiece)
+    pygame.display.update()
+    clock.tick(60)
+
+    currenttime = pygame.time.get_ticks()
+    keys = pygame.key.get_pressed()
+    if currenttime - lastmovetime > downtime and not keys[pygame.K_DOWN] and not keys[pygame.K_s]:
+        currentpiece = movedown(currentpiece)
+        lastmovetime = currenttime
+
+    if (currenttime - lastmovetime > downtime // 2) and (keys[pygame.K_DOWN]):
+        currentpiece = movedown(currentpiece)
+        lastmovetime = currenttime
+    elif (currenttime - lastmovetime > downtime // 2) and (keys[pygame.K_s]):
+        currentpiece = movedown(currentpiece)
+        lastmovetime = currenttime
+    
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False

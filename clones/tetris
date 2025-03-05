@@ -17,6 +17,10 @@ button_x = 455
 button_y = 220
 button_width = 100
 button_height = 50
+unpbuttonx = 250
+unpbuttony = 400
+unpbuttonwidth = 120
+unpbuttonheight = 50 
 
 pygame.init()
 window = pygame.display.set_mode((width, height))
@@ -386,19 +390,36 @@ def pause():
     paused = not paused
     if paused:
         window.fill((128, 128, 128))
-        print("filled")  
         font = pygame.font.Font(None, 72)
         text = font.render("Game Paused", True, (255, 255, 255))
         text_rect = text.get_rect(center=(width // 2, height // 2))
+        drawunpbutton()
         window.blit(text, text_rect)
         pygame.display.update() 
 
-def draw_button():
-    pygame.draw.rect(window, (255, 255, 255), (button_x, button_y, button_width, button_height))
+def draw_pbutton():
+    pygame.draw.rect(window, (255, 255, 255), (button_x - 1, button_y - 1, button_width + 2, button_height + 2))
+    pygame.draw.rect(window, (128, 128, 128), (button_x, button_y, button_width, button_height))
     font = pygame.font.Font(None, 36)
     text = font.render("Pause", True, (0, 0, 0))
     text_rect = text.get_rect(center=(button_x + button_width // 2, button_y + button_height // 2))
     window.blit(text, text_rect)
+
+def drawunpbutton():
+    pygame.draw.rect(window, (0, 0, 0), (unpbuttonx - 1, unpbuttony - 1, unpbuttonwidth + 2, unpbuttonheight + 2))
+    pygame.draw.rect(window, (255, 255, 255), (unpbuttonx, unpbuttony, unpbuttonwidth, unpbuttonheight))
+    font = pygame.font.Font(None, 36)
+    unptext = font.render("Unpause", True, (0, 0, 0))
+    unptext_rect = unptext.get_rect(center=(unpbuttonx + unpbuttonwidth // 2, unpbuttony + unpbuttonheight // 2))
+    window.blit(unptext, unptext_rect)
+
+def drawmovekey():
+    pygame.draw.rect(window, (255, 255, 255), (102, 302, 74, 549))
+    pygame.draw.rect(window, (128, 128, 128), (100, 300, 75, 550))
+    font = pygame.font.Font(None, 14)
+    dmktext = font.render("Q = Rotate left\nE = Rotate left\nA/Left arrow = Move left\nD/Right arrow = Move right\nS/Down arrow = move down\nR = Hold piece\nSpace = Place piece", True, (0, 0, 0))
+    dmktext_rect = dmktext.get_rect(center=(100 + 75 // 2, 300 + 550 // 2))
+    window.blit(dmktext, dmktext_rect)
 
 running = True
 clock = pygame.time.Clock()
@@ -422,8 +443,9 @@ while running:
     nextpiecebox()
     showheldpiece()
     shownextpiece()
-    draw_button()
+    draw_pbutton()
     showscore(score)
+    drawmovekey()
     speedup()
     pygame.display.update()
     clock.tick(60)
@@ -439,19 +461,6 @@ while running:
         pause()
         lastpausetime = currenttime
 
-    while paused:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-                paused = False
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_o:
-                paused = False
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                mouse_x, mouse_y = event.pos
-                if button_x <= mouse_x <= button_x + button_width and button_y <= mouse_y <= button_y + button_height:
-                    pause()
-                    pygame.display.update()
-
     if not paused:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -459,7 +468,6 @@ while running:
             if currenttime - lastmouseclick > 250 and event.type == pygame.MOUSEBUTTONDOWN:
                 mouse_x, mouse_y = event.pos
                 if button_x <= mouse_x <= button_x + button_width and button_y <= mouse_y <= button_y + button_height:
-                    print("pausing")
                     pause()
                     pygame.display.update()
 
@@ -487,3 +495,15 @@ while running:
         if currenttime - lastholdtime > 500 and keys[pygame.K_r] and can_hold:
             currentpiece = holdpiece(currentpiece)
             lastholdtime = currenttime
+
+    while paused:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+                paused = False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_o:
+                paused = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_x, mouse_y = event.pos
+                if unpbuttonx <= mouse_x <= unpbuttonx + unpbuttonwidth and unpbuttony <= mouse_y <= unpbuttony + unpbuttonheight:
+                    paused = False

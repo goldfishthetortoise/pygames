@@ -1,9 +1,22 @@
 import pygame
 import random
+import time
 
-width, height = 400, 700
+width, height = 600, 700
 squaresize = 20
 columns, rows = 12, 25
+score = 0
+game_over = False
+held_piece = None
+can_hold = True
+held_piece_color = None
+next_piece = None
+next_piece_color = None
+paused = False
+button_x = 455
+button_y = 220
+button_width = 100
+button_height = 50
 
 pygame.init()
 window = pygame.display.set_mode((width, height))
@@ -30,17 +43,34 @@ tetrocolors = {
 
 grid = [[(0, (0, 0, 0)) for _ in range(columns)] for _ in range(rows)]
 
+def showscore(score):
+    font = pygame.font.Font(None, 36)
+    text = font.render(f"Score: {score}", True, (255, 255, 255))
+    text_rect = text.get_rect(center=(width // 2, 50))
+    window.blit(text, text_rect)
+
 def drawgrid():
-    for x in range(80, 330, squaresize):
+    for x in range(180, 430, squaresize):
         pygame.draw.line(window, (255, 255, 255), (x, 100), (x, 600), 1)
     for y in range(100, 610, squaresize):
-        pygame.draw.line(window, (255, 255, 255), (80, y), (320, y), 1)
+        pygame.draw.line(window, (255, 255, 255), (180, y), (420, y), 1)
 
 def spawnpiece():
-    global color
-    piece = random.choice(list(TETROMINOES.keys()))
-    color = tetrocolors[piece]
-    return piece, columns // 2 - len(TETROMINOES[piece][0]) // 2, 0
+    global color, game_over, next_piece, next_piece_color
+    if next_piece is None:
+        piece = random.choice(list(TETROMINOES.keys()))
+        color = tetrocolors[piece]
+    else:
+        piece = next_piece
+        color = next_piece_color
+
+    next_piece = random.choice(list(TETROMINOES.keys()))
+    next_piece_color = tetrocolors[next_piece]
+
+    new_piece = piece, columns // 2 - len(TETROMINOES[piece][0]) // 2, 0
+    if collision(new_piece):
+        game_over = True
+    return new_piece
 
 def collision(piece):
     shape = TETROMINOES[piece[0]]
@@ -53,20 +83,32 @@ def collision(piece):
                     return True
     return False
 
-def drawpiece(piece):
+def drawpiece(piece, piece_color):
     shape = TETROMINOES[piece[0]]
     if len(piece) == 4:
         shape = piece[3]
     for y, row in enumerate(shape):
         for x, square in enumerate(row):
             if square:
-                pygame.draw.rect(window, color, (80 + (piece[1] + x) * squaresize, 100 + (piece[2] + y) * squaresize, squaresize, squaresize))
+                pygame.draw.rect(window, piece_color, (180 + (piece[1] + x) * squaresize, 100 + (piece[2] + y) * squaresize, squaresize, squaresize))
 
 def drawgridpieces():
     for y, row in enumerate(grid):
         for x, (square, color) in enumerate(row):
             if square:
-                pygame.draw.rect(window, color, (80 + x * squaresize, 100 + y * squaresize, squaresize, squaresize))
+                pygame.draw.rect(window, color, (180 + x * squaresize, 100 + y * squaresize, squaresize, squaresize))
+
+def straightdown(piece):
+    while True:
+        if len(piece) == 4:
+            new_piece = piece[0], piece[1], piece[2] + 1, piece[3]
+        else:
+            new_piece = piece[0], piece[1], piece[2] + 1
+        if collision(new_piece):
+            break
+        piece = new_piece
+    lockpiece(piece)
+    return spawnnewpiece()
 
 def movedown(piece):
     if len(piece) == 4:
@@ -97,9 +139,20 @@ def moveright(piece):
         return new_piece
     return piece
 
+def rotate_around_center(shape):
+    rows = len(shape)
+    cols = len(shape[0])
+    new_shape = [[0] * rows for _ in range(cols)]
+    for y in range(rows):
+        for x in range(cols):
+            new_shape[x][rows - 1 - y] = shape[y][x]
+    return new_shape
+
 def rotateright(piece):
     shape = TETROMINOES[piece[0]]
-    new_shape = [list(row) for row in zip(*shape[::-1])]
+    if len(piece) == 4:
+        shape = piece[3]
+    new_shape = rotate_around_center(shape)
     new_piece = piece[0], piece[1], piece[2], new_shape
     if piece[1] + len(new_shape[0]) > columns:
         new_piece = new_piece[0], columns - len(new_shape[0]), new_piece[2], new_shape
@@ -109,7 +162,9 @@ def rotateright(piece):
 
 def rotateleft(piece):
     shape = TETROMINOES[piece[0]]
-    new_shape = [list(row) for row in zip(*shape)][::-1]
+    if len(piece) == 4:
+        shape = piece[3]
+    new_shape = rotate_around_center(shape)
     new_piece = piece[0], piece[1], piece[2], new_shape
     if piece[1] + len(new_shape[0]) > columns:
         new_piece = new_piece[0], columns - len(new_shape[0]), new_piece[2], new_shape
@@ -118,6 +173,7 @@ def rotateleft(piece):
     return new_piece
 
 def lockpiece(piece):
+    global can_hold
     shape = TETROMINOES[piece[0]]
     if len(piece) == 4:
         shape = piece[3]
@@ -125,9 +181,224 @@ def lockpiece(piece):
         for x, square in enumerate(row):
             if square:
                 grid[piece[2] + y][piece[1] + x] = (1, color)
+    clearrows()
+    can_hold = True
 
 def spawnnewpiece():
     return spawnpiece()
+
+def clearrows():
+    global grid
+    global score
+    completed_rows = [y for y, row in enumerate(grid) if all(square for square, color in row)]
+    if completed_rows:
+        for _ in range(3):
+            for y in completed_rows:
+                for x in range(columns):
+                    grid[y][x] = (1, (255, 255, 255))
+            drawgridpieces()
+            pygame.display.update()
+            time.sleep(0.1)
+            for y in completed_rows:
+                for x in range(columns):
+                    grid[y][x] = (1, (0, 0, 0))
+            drawgridpieces()
+            pygame.display.update()
+            time.sleep(0.1)
+        if len(completed_rows) == 4:
+            score += 800
+        elif len(completed_rows) == 3:
+            score += 500
+        elif len(completed_rows) == 2:
+            score += 300
+        elif len(completed_rows) == 1:
+            score += 100
+        new_grid = [row for y, row in enumerate(grid) if y not in completed_rows]
+        cleared_rows = rows - len(new_grid)
+        new_grid = [[(0, (0, 0, 0)) for _ in range(columns)] for _ in range(cleared_rows)] + new_grid
+        grid = new_grid
+
+def get_ghost_piece(piece):
+    while True:
+        if len(piece) == 4:
+            new_piece = piece[0], piece[1], piece[2] + 1, piece[3]
+        else:
+            new_piece = piece[0], piece[1], piece[2] + 1
+        if collision(new_piece):
+            break
+        piece = new_piece
+    return piece
+
+def draw_ghost_piece(piece):
+    ghost_piece = get_ghost_piece(piece)
+    shape = TETROMINOES[ghost_piece[0]]
+    if len(ghost_piece) == 4:
+        shape = ghost_piece[3]
+    
+    ghost_color = color + (128,)  # Add alpha value for 50% opacity
+    ghost_surface = pygame.Surface((squaresize, squaresize), pygame.SRCALPHA)
+    ghost_surface.fill(ghost_color)
+    
+    for y, row in enumerate(shape):
+        for x, square in enumerate(row):
+            if square:
+                window.blit(ghost_surface, (180 + (ghost_piece[1] + x) * squaresize, 100 + (ghost_piece[2] + y) * squaresize))
+
+def gameover():
+    font = pygame.font.Font(None, 36)
+    text = font.render("Game Over", True, (255, 255, 255))
+    window.blit(text, (width // 2 - text.get_width() // 2, height // 2 - text.get_height() // 2))
+    pygame.display.update()
+    time.sleep(2)
+
+def holdpiece(piece):
+    global held_piece, held_piece_color, can_hold, currentpiece, color
+    if not can_hold:
+        return piece
+    if held_piece is None:
+        held_piece = piece
+        held_piece_color = color
+        currentpiece = spawnnewpiece()
+    else:
+        held_piece, currentpiece = piece, held_piece
+        held_piece_color, color = color, held_piece_color
+        currentpiece = currentpiece[0], columns // 2 - len(TETROMINOES[currentpiece[0]][0]) // 2, 0
+    can_hold = False
+    return currentpiece
+
+def showheldpiece():
+    if held_piece is not None:
+        shape = TETROMINOES[held_piece[0]]
+        if len(held_piece) == 4:
+            shape = held_piece[3]
+        box_x = 45
+        box_y = 95
+        box_width = 100
+        box_height = 100
+        padding = 10
+        piece_width = len(shape[0]) * squaresize
+        piece_height = len(shape) * squaresize
+        piece_x = box_x + (box_width - piece_width) // 2
+        piece_y = box_y + (box_height - piece_height) // 2
+        for y, row in enumerate(shape):
+            for x, square in enumerate(row):
+                if square:
+                    pygame.draw.rect(window, held_piece_color, (piece_x + x * squaresize, piece_y + y * squaresize, squaresize, squaresize))
+
+def heldpiecebox():
+    box_x = 45
+    box_y = 100
+    box_width = 100
+    box_height = 100
+    pygame.draw.rect(window, (255, 255, 255), (box_x, box_y, box_width, box_height), 2)
+
+def nextpiecebox():
+    box_x = 455
+    box_y = 100
+    box_width = 100
+    box_height = 100
+    pygame.draw.rect(window, (255, 255, 255), (box_x, box_y, box_width, box_height), 2)
+
+def shownextpiece():
+    if next_piece is not None:
+        shape = TETROMINOES[next_piece]
+        box_x = 455
+        box_y = 100
+        box_width = 100
+        box_height = 100
+        piece_width = len(shape[0]) * squaresize
+        piece_height = len(shape) * squaresize
+        piece_x = box_x + (box_width - piece_width) // 2
+        piece_y = box_y + (box_height - piece_height) // 2
+        for y, row in enumerate(shape):
+            for x, square in enumerate(row):
+                if square:
+                    pygame.draw.rect(window, next_piece_color, (piece_x + x * squaresize, piece_y + y * squaresize, squaresize, squaresize))    
+
+def speedup():
+    global downtime
+    downtime = 1000
+    if score >= 30000:
+        downtime = 950
+    if score >= 60000:
+        downtime = 900
+    if score >= 120000:
+        downtime = 850
+    if score >= 180000:
+        downtime = 800
+    if score >= 240000:
+        downtime = 750
+    if score >= 30000:
+        downtime = 700
+    if score >= 330000:
+        downtime = 650
+    if score >= 360000:
+        downtime = 600
+    if score >= 390000:
+        downtime = 550
+    if score >= 420000:
+        downtime = 500
+    if score >= 450000:
+        downtime = 450
+    if score >= 480000:
+        downtime = 400
+    if score >= 510000:
+        downtime = 350
+    if score >= 540000:
+        downtime = 300
+    if score >= 570000:
+        downtime = 250
+    if score >= 600000:
+        downtime = 200
+    if score >= 630000:
+        downtime = 150
+    if score >= 660000:
+        downtime = 100
+    if score >= 690000:
+        downtime = 50
+    if score >= 720000:
+        downtime = 40
+    if score >= 750000:
+        downtime = 30
+    if score >= 780000:
+        downtime = 25
+    if score >= 810000:
+        downtime = 20
+    if score >= 840000:
+        downtime = 15
+    if score >= 870000:
+        downtime = 10
+    if score >= 930000:
+        downtime = 7.5
+    if score >= 960000:
+        downtime = 5
+    if score >= 990000:
+        downtime = 2.5
+    if score >= 1020000:
+        downtime = 2
+    if score >= 1050000:
+        downtime = 1.5
+    if score >= 1080000:
+        downtime = 1
+
+def pause():
+    global paused
+    paused = not paused
+    if paused:
+        window.fill((128, 128, 128))
+        print("filled")  
+        font = pygame.font.Font(None, 72)
+        text = font.render("Game Paused", True, (255, 255, 255))
+        text_rect = text.get_rect(center=(width // 2, height // 2))
+        window.blit(text, text_rect)
+        pygame.display.update() 
+
+def draw_button():
+    pygame.draw.rect(window, (255, 255, 255), (button_x, button_y, button_width, button_height))
+    font = pygame.font.Font(None, 36)
+    text = font.render("Pause", True, (0, 0, 0))
+    text_rect = text.get_rect(center=(button_x + button_width // 2, button_y + button_height // 2))
+    window.blit(text, text_rect)
 
 running = True
 clock = pygame.time.Clock()
@@ -135,37 +406,84 @@ currentpiece = spawnpiece()
 lastmovetime = pygame.time.get_ticks()
 sidelastmovetime = pygame.time.get_ticks()
 rotatelastmovetime = pygame.time.get_ticks()
+straightdownlastmovetime = pygame.time.get_ticks()
+lastholdtime = pygame.time.get_ticks()
+lastpausetime = pygame.time.get_ticks()
+lastmouseclick = pygame.time.get_ticks()
 downtime = 1000
 
 while running:
     window.fill((0, 0, 0))
     drawgrid()
-    drawpiece(currentpiece)
+    draw_ghost_piece(currentpiece)
+    drawpiece(currentpiece, color)
     drawgridpieces()
+    heldpiecebox()
+    nextpiecebox()
+    showheldpiece()
+    shownextpiece()
+    draw_button()
+    showscore(score)
+    speedup()
     pygame.display.update()
     clock.tick(60)
 
+    if game_over:
+        gameover()
+        running = False
+        break
+
     currenttime = pygame.time.get_ticks()
     keys = pygame.key.get_pressed()
-    if currenttime - lastmovetime > downtime and not keys[pygame.K_DOWN] and not keys[pygame.K_s]:
-        currentpiece = movedown(currentpiece)
-        lastmovetime = currenttime
-    if (currenttime - lastmovetime > downtime // 2) and (keys[pygame.K_DOWN] or keys[pygame.K_s]):
-        currentpiece = movedown(currentpiece)
-        lastmovetime = currenttime
-    if (currenttime - sidelastmovetime > 100) and (keys[pygame.K_LEFT] or keys[pygame.K_a]):
-        currentpiece = moveleft(currentpiece)
-        sidelastmovetime = currenttime
-    if (currenttime - sidelastmovetime > 100) and (keys[pygame.K_RIGHT] or keys[pygame.K_d]):
-        currentpiece = moveright(currentpiece)
-        sidelastmovetime = currenttime
-    if currenttime - rotatelastmovetime > 100 and keys[pygame.K_e]:
-        currentpiece = rotateright(currentpiece)
-        rotatelastmovetime = currenttime
-    if currenttime - rotatelastmovetime > 100 and keys[pygame.K_q]:
-        currentpiece = rotateleft(currentpiece)
-        rotatelastmovetime = currenttime
+    if currenttime - lastpausetime > 250 and keys[pygame.K_p]:
+        pause()
+        lastpausetime = currenttime
 
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            running = False
+    while paused:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+                paused = False
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_o:
+                paused = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_x, mouse_y = event.pos
+                if button_x <= mouse_x <= button_x + button_width and button_y <= mouse_y <= button_y + button_height:
+                    pause()
+                    pygame.display.update()
+
+    if not paused:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if currenttime - lastmouseclick > 250 and event.type == pygame.MOUSEBUTTONDOWN:
+                mouse_x, mouse_y = event.pos
+                if button_x <= mouse_x <= button_x + button_width and button_y <= mouse_y <= button_y + button_height:
+                    print("pausing")
+                    pause()
+                    pygame.display.update()
+
+        if currenttime - lastmovetime > downtime and not keys[pygame.K_DOWN] and not keys[pygame.K_s]:
+            currentpiece = movedown(currentpiece)
+            lastmovetime = currenttime
+        if (currenttime - lastmovetime > downtime // 2) and (keys[pygame.K_DOWN] or keys[pygame.K_s]):
+            currentpiece = movedown(currentpiece)
+            lastmovetime = currenttime
+        if (currenttime - sidelastmovetime > 100) and (keys[pygame.K_LEFT] or keys[pygame.K_a]):
+            currentpiece = moveleft(currentpiece)
+            sidelastmovetime = currenttime
+        if (currenttime - sidelastmovetime > 100) and (keys[pygame.K_RIGHT] or keys[pygame.K_d]):
+            currentpiece = moveright(currentpiece)
+            sidelastmovetime = currenttime
+        if currenttime - rotatelastmovetime > 250 and keys[pygame.K_e]:
+            currentpiece = rotateright(currentpiece)
+            rotatelastmovetime = currenttime
+        if currenttime - rotatelastmovetime > 250 and keys[pygame.K_q]:
+            currentpiece = rotateleft(currentpiece)
+            rotatelastmovetime = currenttime
+        if currenttime - straightdownlastmovetime > 500 and keys[pygame.K_SPACE]:
+            currentpiece = straightdown(currentpiece)
+            straightdownlastmovetime = currenttime
+        if currenttime - lastholdtime > 500 and keys[pygame.K_r] and can_hold:
+            currentpiece = holdpiece(currentpiece)
+            lastholdtime = currenttime

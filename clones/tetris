@@ -113,6 +113,7 @@ def straightdown(piece):
         if collision(new_piece):
             break
         piece = new_piece
+    print("straightdown")
     lockpiece(piece)
     return spawnnewpiece()
 
@@ -224,19 +225,19 @@ def clearrows():
         new_grid = [[(0, (0, 0, 0)) for _ in range(columns)] for _ in range(cleared_rows)] + new_grid
         grid = new_grid
 
-def get_ghost_piece(piece):
+def get_ghost_piece(gpiece):
     while True:
-        if len(piece) == 4:
-            new_piece = piece[0], piece[1], piece[2] + 1, piece[3]
+        if len(gpiece) == 4:
+            new_piece = gpiece[0], gpiece[1], gpiece[2] + 1, gpiece[3]
         else:
-            new_piece = piece[0], piece[1], piece[2] + 1
+            new_piece = gpiece[0], gpiece[1], gpiece[2] + 1
         if collision(new_piece):
             break
-        piece = new_piece
-    return piece
+        gpiece = new_piece
+    return gpiece
 
-def draw_ghost_piece(piece):
-    ghost_piece = get_ghost_piece(piece)
+def draw_ghost_piece(gpiece):
+    ghost_piece = get_ghost_piece(gpiece)
     shape = TETROMINOES[ghost_piece[0]]
     if len(ghost_piece) == 4:
         shape = ghost_piece[3]
@@ -474,7 +475,7 @@ def homebuttonplay():
     pygame.draw.rect(window, (128, 128, 128), (455, 424, 100, 50))
     font = pygame.font.Font(None, 36)
     hbtext = font.render("Home", True, (0, 0, 0))
-    hbtextrect = hbtext.get_rect(center=(455, 424))
+    hbtextrect = hbtext.get_rect(center=(505, 450))
     window.blit(hbtext, hbtextrect)
 
 def homescreen():
@@ -516,12 +517,14 @@ while running:
             mousex, mousey = event.pos
             if 246 <= mousex <= 358 and 250 <= mousey <= 296:
                 activegame = True
+                currentpiece = spawnpiece()
+                grid = [[(0, (0, 0, 0)) for _ in range(columns)] for _ in range(rows)]  # Reset the grid
 
     while activegame:
         window.fill((0, 0, 0))
         drawgrid()
-        draw_ghost_piece(currentpiece)
         drawpiece(currentpiece, color)
+        draw_ghost_piece(currentpiece)
         drawgridpieces()
         heldpiecebox()
         nextpiecebox()
@@ -538,7 +541,6 @@ while running:
 
         if game_over:
             gameover()
-            running = False
             break
 
         currenttime = pygame.time.get_ticks()
@@ -551,16 +553,28 @@ while running:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     running = False
+                    paused = False
+                    activegame = False
                 if currenttime - lastmouseclick > 250 and event.type == pygame.MOUSEBUTTONDOWN:
                     mouse_x, mouse_y = event.pos
                     if button_x <= mouse_x <= button_x + button_width and button_y <= mouse_y <= button_y + button_height:
                         pause()
                         pygame.display.update()
+                    elif 455 <= mouse_x <= 555 and 424 <= mouse_y <= 474:
+                        activegame = False
+                        currentpiece = None
+                        next_piece = None
+                        next_piece_color = None
+                        held_piece = None
+                        score = 0
+                        grid = [[(0, (0, 0, 0)) for _ in range(columns)] for _ in range(rows)]  # Reset the grid
+                        homescreen()
+                        pygame.display.update()
 
             if currenttime - lastmovetime > downtime and not keys[pygame.K_DOWN] and not keys[pygame.K_s]:
                 currentpiece = movedown(currentpiece)
                 lastmovetime = currenttime
-            if (currenttime - lastmovetime > downtime // 2) and (keys[pygame.K_DOWN] or keys[pygame.K_s]):
+            if (currenttime - lastmovetime > downtime // 4) and (keys[pygame.K_DOWN] or keys[pygame.K_s]):
                 currentpiece = movedown(currentpiece)
                 lastmovetime = currenttime
             if (currenttime - sidelastmovetime > 100) and (keys[pygame.K_LEFT] or keys[pygame.K_a]):
@@ -575,7 +589,7 @@ while running:
             if currenttime - rotatelastmovetime > 250 and keys[pygame.K_q]:
                 currentpiece = rotateleft(currentpiece)
                 rotatelastmovetime = currenttime
-            if currenttime - straightdownlastmovetime > 500 and keys[pygame.K_SPACE]:
+            if currenttime - straightdownlastmovetime > 650 and keys[pygame.K_SPACE]:
                 currentpiece = straightdown(currentpiece)
                 straightdownlastmovetime = currenttime
             if currenttime - lastholdtime > 500 and keys[pygame.K_r] and can_hold:
@@ -594,3 +608,7 @@ while running:
                     mouse_x, mouse_y = event.pos
                     if unpbuttonx <= mouse_x <= unpbuttonx + unpbuttonwidth and unpbuttony <= mouse_y <= unpbuttony + unpbuttonheight:
                         paused = False
+
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
